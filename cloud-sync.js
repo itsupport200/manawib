@@ -281,4 +281,98 @@
     show('<h1>تعذر الاتصال</h1><p id="cloudMessage" class="cloud-error"></p>');
     message(e.message || 'تحقق من إعداد Supabase.', true);
   });
+  // Add email recovery and reset flows to the public login screen.
+  function appRedirectUrl() {
+    return window.location.origin + window.location.pathname;
+  }
+  function showRecoveryRequest() {
+    show('<h1>استعادة كلمة المرور</h1><p>أدخل بريد حسابك وسنرسل لك رابطاً لاختيار كلمة مرور جديدة.</p><form id="recoveryRequest"><label for="recoveryEmail">البريد الإلكتروني</label><input id="recoveryEmail" type="email" autocomplete="email" required><p id="cloudMessage" class="cloud-note"></p><div class="cloud-actions"><button id="recoverySend" type="submit">إرسال رابط الاستعادة</button><button id="recoveryBack" type="button" class="secondary">العودة للدخول</button></div></form>');
+    document.getElementById('recoveryBack').onclick = () => showLogin();
+    document.getElementById('recoveryRequest').onsubmit = async event => {
+      event.preventDefault();
+      const button = document.getElementById('recoverySend');
+      button.disabled = true;
+      const email = document.getElementById('recoveryEmail').value.trim();
+      const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: appRedirectUrl() });
+      button.disabled = false;
+      if (error) message('تعذر إرسال الرابط. تحقق من البريد وحاول مرة أخرى.', true);
+      else message('إذا كان البريد مسجلاً، ستصلك رسالة استعادة. افتحها من هذا المتصفح.', false);
+    };
+  }
+  function showPasswordUpdate() {
+    show('<h1>تعيين كلمة مرور جديدة</h1><p>اختر كلمة مرور من 6 أحرف على الأقل.</p><form id="passwordUpdate"><label for="newCloudPassword">كلمة المرور الجديدة</label><input id="newCloudPassword" type="password" autocomplete="new-password" minlength="6" required><p id="cloudMessage" class="cloud-error"></p><div class="cloud-actions"><button id="passwordUpdateButton" type="submit">حفظ كلمة المرور</button></div></form>');
+    document.getElementById('passwordUpdate').onsubmit = async event => {
+      event.preventDefault();
+      const button = document.getElementById('passwordUpdateButton');
+      button.disabled = true;
+      const password = document.getElementById('newCloudPassword').value;
+      const { error } = await client.auth.updateUser({ password });
+      if (error) {
+        button.disabled = false;
+        message('تعذر تغيير كلمة المرور. أعد طلب رابط استعادة جديد.', true);
+        return;
+      }
+      history.replaceState(null, document.title, appRedirectUrl());
+      message('تم تغيير كلمة المرور. جارٍ فتح مناوب…', false);
+      setTimeout(() => window.location.reload(), 700);
+    };
+  }
+  const authReturn = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const returnedAuthType = authReturn.get('type');
+  const returnedAuthError = authReturn.get('error_description');
+  let callbackHandled = false;
+  if (client) {
+    client.auth.onAuthStateChange((event, session) => {
+      if ((event === 'PASSWORD_RECOVERY' || returnedAuthType === 'recovery') && session?.user && !callbackHandled) {
+        callbackHandled = true;
+        queueMicrotask(showPasswordUpdate);
+      } else if (event === 'SIGNED_IN' && session?.user && ['signup','email'].includes(returnedAuthType) && !callbackHandled) {
+        callbackHandled = true;
+        setTimeout(() => {
+          history.replaceState(null, document.title, appRedirectUrl());
+          window.location.reload();
+        }, 0);
+      }
+    });
+    if (returnedAuthType === 'recovery') {
+      client.auth.getSession().then(({ data }) => {
+        if (data.session && !callbackHandled) {
+          callbackHandled = true;
+          showPasswordUpdate();
+        } else if (!data.session) showLogin('انتهت صلاحية رابط الاستعادة. اطلب رابطاً جديداً.');
+      });
+    }
+    if (returnedAuthError) {
+      setTimeout(() => {
+        history.replaceState(null, document.title, appRedirectUrl());
+        showLogin('تعذر تأكيد البريد. قد يكون الرابط منتهي الصلاحية أو استُخدم من قبل. أعد إرسال رابط التأكيد.');
+      }, 1200);
+    }
+    const addRecoveryButtons = () => {
+      const actions = document.querySelector('#cloudLogin .cloud-actions');
+      if (!actions || document.getElementById('cloudForgotPassword')) return;
+      const forgot = document.createElement('button');
+      forgot.type = 'button';
+      forgot.id = 'cloudForgotPassword';
+      forgot.className = 'secondary';
+      forgot.textContent = 'نسيت كلمة المرور؟';
+      forgot.onclick = showRecoveryRequest;
+      actions.appendChild(forgot);
+      const resend = document.createElement('button');
+      resend.type = 'button';
+      resend.id = 'cloudResendConfirmation';
+      resend.className = 'secondary';
+      resend.textContent = 'إعادة إرسال تأكيد البريد';
+      resend.onclick = async () => {
+        const email = document.getElementById('cloudEmail')?.value.trim();
+        if (!email) { message('أدخل بريدك أولاً.', true); return; }
+        const { error } = await client.auth.resend({ type:'signup', email, options:{ emailRedirectTo:appRedirectUrl() } });
+        if (error) message('تعذر إرسال رسالة التأكيد. انتظر قليلاً ثم حاول مرة أخرى.', true);
+        else message('أرسلنا رابط تأكيد جديد. استخدم أحدث رسالة وصلتك.', false);
+      };
+      actions.appendChild(resend);
+    };
+    new MutationObserver(addRecoveryButtons).observe(document.body, { childList:true, subtree:true });
+    addRecoveryButtons();
+  }
 })();
