@@ -171,9 +171,37 @@
   function showLogin(errorText) {
     const returnButton = document.querySelector('.shell').style.display !== 'none'
       ? '<button type="button" class="secondary" id="returnToView">العودة للعرض</button>' : '';
-    show('<h1>دخول للتعديل</h1><p>عرض الأسماء والجداول متاح للجميع. أدخل حساباً مصرحاً له للإضافة أو التعديل.</p><form id="cloudLogin"><label for="cloudEmail">البريد الإلكتروني</label><input id="cloudEmail" type="email" autocomplete="username" required><label for="cloudPassword">كلمة المرور</label><input id="cloudPassword" type="password" autocomplete="current-password" required><p id="cloudMessage" class="cloud-error"></p><div class="cloud-actions"><button id="cloudLoginButton" type="submit">دخول</button>'+returnButton+'</div></form>');
+    show('<h1>دخول للتعديل</h1><p>عرض الأسماء والجداول متاح للجميع. سجّل الدخول أو أنشئ حساباً؛ التعديل متاح للحسابات المعتمدة فقط.</p><form id="cloudLogin"><label for="cloudEmail">البريد الإلكتروني</label><input id="cloudEmail" type="email" autocomplete="username" required><label for="cloudPassword">كلمة المرور</label><input id="cloudPassword" type="password" autocomplete="new-password" minlength="6" required><p id="cloudMessage" class="cloud-error"></p><div class="cloud-actions"><button id="cloudLoginButton" type="submit">دخول</button><button id="cloudSignUpButton" class="secondary" type="button">إنشاء حساب</button>'+returnButton+'</div></form>');
     const back = document.getElementById('returnToView');
     if (back) back.onclick = () => { gate.hidden = true; };
+    document.getElementById('cloudSignUpButton').onclick = async () => {
+      const button = document.getElementById('cloudSignUpButton');
+      const email = document.getElementById('cloudEmail').value.trim();
+      const password = document.getElementById('cloudPassword').value;
+      if (!email || password.length < 6) {
+        message('أدخل البريد وكلمة مرور من 6 أحرف على الأقل.', true);
+        return;
+      }
+      button.disabled = true;
+      message('جارٍ إنشاء الحساب…');
+      try {
+        const { data, error } = await client.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.user?.identities?.length === 0) {
+          message('قد يكون لهذا البريد حساب مسبقاً. جرّب تسجيل الدخول.', true);
+        } else if (data.session?.user) {
+          await prepareEditor(data.session);
+          return;
+        } else {
+          message('تم إنشاء الحساب. أكّد بريدك من رسالة Supabase، ثم سجّل الدخول.', false);
+        }
+      } catch (e) {
+        message('تعذر إنشاء الحساب. تحقق من البريد وكلمة المرور ثم حاول مجدداً.', true);
+      } finally {
+        button.disabled = false;
+      }
+    };
+
     document.getElementById('cloudLogin').onsubmit = async event => {
       event.preventDefault();
       const button = document.getElementById('cloudLoginButton');
