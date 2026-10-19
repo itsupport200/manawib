@@ -1,8 +1,4 @@
 /* Global layout and component styles. */
-body.cloud-required .shell {
-  display: none!important;
-}
-
 .modal {
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
