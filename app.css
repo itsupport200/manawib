@@ -1,9 +1,4 @@
 /* Global layout and component styles. */
-.modal {
-  max-height: calc(100dvh - 32px);
-  overflow-y: auto;
-}
-
 :root {
   --ink: #20312d;
   --muted: #71817b;
@@ -498,6 +493,8 @@ button {
   align-items: center;
   justify-content: center;
   padding: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-back.show {
@@ -506,10 +503,23 @@ button {
 
 .modal {
   width: min(520px,100%);
+  max-height: calc(100vh - 36px);
   background: #fff;
   border-radius: 18px;
   box-shadow: 0 24px 80px #0003;
+  overflow-y: auto;
+}
+
+.modal.employee-modal {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+@supports (height: 100dvh) {
+  .modal {
+    max-height: calc(100dvh - 36px);
+  }
 }
 
 .modal-head {
@@ -534,6 +544,21 @@ button {
 
 .form {
   padding: 19px 21px;
+}
+
+.employee-modal #employeeForm {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.employee-modal #employeeForm > .form {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .fields {
@@ -575,6 +600,8 @@ button {
   display: flex;
   justify-content: flex-start;
   gap: 8px;
+  flex-shrink: 0;
+  background: #fff;
 }
 
 .toast {
@@ -620,6 +647,20 @@ button {
 }
 
 @media(max-width:560px) {
+  .modal-back {
+    padding: 12px;
+  }
+
+  .employee-modal {
+    height: min(680px, calc(100vh - 24px));
+  }
+
+  .employee-modal .modal-actions .button {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+
   .shell {
     padding: 17px 13px 30px;
   }
@@ -692,6 +733,14 @@ button {
     grid-column: auto;
   }
 
+}
+
+@supports (height: 100dvh) {
+  @media(max-width:560px) {
+    .employee-modal {
+      height: min(680px, calc(100dvh - 24px));
+    }
+  }
 }
 
 /* Leave calendar, forecast, and holiday styles. */

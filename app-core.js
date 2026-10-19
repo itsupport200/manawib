@@ -219,6 +219,7 @@ function nextStart(e) {
 function openModal(e) {
   editingId = e?.id || null;
   document.getElementById('modalTitle').textContent = e ? 'تعديل بيانات الموظف': 'إضافة موظف';
+  document.getElementById('saveEmployeeBtn').textContent = e ? 'حفظ التعديلات' : 'إضافة الموظف';
   document.getElementById('name').value = e?.name || '';
   document.getElementById('number').value = e?.number || '';
   document.getElementById('phone').value = e?.phone || '';

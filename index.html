@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./app.css?v=20261019-structure">
+  <link rel="stylesheet" href="./app.css?v=20261019-add-employee-button">
 </head>
 <body>
   <div class="shell">
@@ -83,7 +83,7 @@
   </div>
 
   <div class="modal-back" id="modalBack">
-    <div class="modal">
+    <div class="modal employee-modal">
       <div class="modal-head">
         <h2 id="modalTitle">إضافة موظف</h2>
         <button class="close" id="closeModal" aria-label="إغلاق">✕</button>
@@ -114,7 +114,7 @@
           </p>
         </div>
         <div class="modal-actions">
-          <button class="button primary" type="submit">حفظ الموظف</button>
+          <button class="button primary" type="submit" id="saveEmployeeBtn">إضافة الموظف</button>
           <button class="button ghost" type="button" id="cancelModal">إلغاء</button>
         </div>
       </form>
@@ -124,7 +124,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Application code is split by responsibility; keep this load order. -->
-  <script src="./app-core.js?v=20261019-structure"></script>
+  <script src="./app-core.js?v=20261019-add-employee-button"></script>
   <script src="./employee-features.js?v=20261019-structure"></script>
   <script src="./cloud-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
