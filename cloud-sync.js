@@ -6,17 +6,21 @@
   const key = window.MANAWIB_SUPABASE_KEY || '';
   const localEmployees = JSON.parse(JSON.stringify(employees));
   const localHolidays = JSON.parse(JSON.stringify(holidays));
-  const oldSave = save;
-  const oldSaveHolidays = saveHolidays;
   let client, user = null;
-  let employeeBaseline = new Map(), holidayBaseline = new Map();
+  let employeeBaseline = new Map(), privateBaseline = new Map(), holidayBaseline = new Map();
   let syncQueue = Promise.resolve();
   let pendingAction = null;
+  let unlockTimer = null;
+  let hiddenAt = null;
 
   const style = document.createElement('style');
-  style.textContent = '.cloud-gate{position:fixed;inset:0;z-index:20;background:#f5f7f4ed;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif;color:#20312d}.cloud-card{width:min(460px,100%);background:#fff;border:1px solid #e5ebe7;border-radius:18px;padding:24px;box-shadow:0 12px 36px #253c3010}.cloud-card h1{font-size:21px;margin:0 0 8px}.cloud-card p{font-size:14px;line-height:1.8;color:#71817b}.cloud-card label{display:block;font-size:13px;margin:12px 0 5px}.cloud-card input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #dce4de;border-radius:9px;font:inherit}.cloud-card button{border:0;border-radius:9px;padding:11px 15px;background:#16795b;color:white;font:inherit;cursor:pointer;margin-top:14px}.cloud-card button.secondary{background:#e9f4ee;color:#16795b;margin-right:6px}.cloud-card button:disabled{opacity:.55;cursor:wait}.cloud-error{color:#aa3936!important}.cloud-note{font-size:12px!important}.cloud-actions{display:flex;flex-wrap:wrap;gap:6px}.cloud-gate[hidden]{display:none}.cloud-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cloud-controls .button{white-space:nowrap}';
+  style.textContent = '.cloud-gate{position:fixed;inset:0;z-index:20;background:#f5f7f4ed;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif;color:#20312d}.cloud-card{width:min(460px,100%);background:#fff;border:1px solid #e5ebe7;border-radius:18px;padding:24px;box-shadow:0 12px 36px #253c3010}.cloud-card h1{font-size:21px;margin:0 0 8px}.cloud-card p{font-size:14px;line-height:1.8;color:#71817b}.cloud-card label{display:block;font-size:13px;margin:12px 0 5px}.cloud-card input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #dce4de;border-radius:9px;font:inherit}.cloud-card button{border:0;border-radius:9px;padding:11px 15px;background:#16795b;color:white;font:inherit;cursor:pointer;margin-top:14px}.cloud-card button.secondary{background:#e9f4ee;color:#16795b;margin-right:6px}.cloud-card button:disabled{opacity:.55;cursor:wait}.cloud-error{color:#aa3936!important}.cloud-note{font-size:12px!important}.cloud-actions{display:flex;flex-wrap:wrap;gap:6px}.cloud-gate[hidden]{display:none}.cloud-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cloud-controls .button{white-space:nowrap}.directory-mode .stats,.directory-mode #addBtn,.directory-mode #quickAdd,.directory-mode #emptyAdd,.directory-mode #detail .profile .actions{display:none!important}.code-overlay{position:fixed;inset:0;z-index:19;background:#13272080;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif}.code-card{width:min(410px,100%);background:#fff;border-radius:18px;padding:22px;box-shadow:0 16px 50px #13272030}.code-card h2{margin:0 0 8px;font-size:20px}.code-card p{color:#6a7b74;line-height:1.8;font-size:14px}.code-card input{box-sizing:border-box;width:100%;padding:13px;border:1px solid #dce4de;border-radius:10px;font:inherit;letter-spacing:.12em;text-transform:uppercase}.code-card .code-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.code-card button{border:0;border-radius:9px;padding:10px 14px;background:#16795b;color:white;font:inherit;cursor:pointer}.code-card button.secondary{background:#edf3ef;color:#456057}.one-time-code{font-size:22px!important;font-weight:700;letter-spacing:.16em;text-align:center;padding:14px;background:#f1f7f3;border-radius:10px;color:#16795b!important;direction:ltr}.directory-mode .employee .emp-main small,.directory-mode .employee .leave-count{display:none!important}';
   document.head.appendChild(style);
   document.querySelector('.shell').style.display = 'none';
+  // A previous release cached complete employee records locally. Keep the snapshot
+  // only for an explicit administrator import and remove the browser copy afterwards.
+  localStorage.removeItem('manawib_employees_v1');
+  localStorage.removeItem('manawib_oman_holidays_v1');
   const gate = document.createElement('main');
   gate.className = 'cloud-gate';
   document.body.appendChild(gate);
@@ -54,24 +58,168 @@
     if (action) queueMicrotask(action);
   }
   function startApp() {
+    window.MANAWIB_DIRECTORY_MODE = !user;
+    window.MANAWIB_IS_EDITOR = !!user;
+    document.body.classList.toggle('directory-mode', !user);
     document.querySelector('.shell').style.display = '';
     gate.hidden = true;
     renderAccountControl();
     render();
     renderDetail();
+    updateAccessCodeButton();
     document.title = 'مناوب | إدارة الموظفين والشفتات';
     resumePendingAction();
   }
-  function employeeRow(e) {
-    return { id:e.id, name:e.name, number:e.number, phone:e.phone||'', start_date:e.startDate,
+  function employeeDirectoryRow(e) { return { id:e.id, name:e.name }; }
+  function employeePrivateRow(e) {
+    return { id:e.id, number:e.number, phone:e.phone||'', start_date:e.startDate,
       leave_balance:Number(e.leaveBalance)||0, leave_used:e.leaveUsed||{}, credit_years:e.creditYears||[],
       accrual_anchor:e.accrualAnchor||null };
   }
-  function employeeFromRow(r) {
-    return { id:r.id, name:r.name, number:r.number, phone:r.phone||'', startDate:r.start_date,
+  function employeeFromPrivateRow(r, name, hasAccessCode) {
+    return { id:r.id, name, number:r.number, phone:r.phone||'', startDate:r.start_date,
       leaveBalance:Number(r.leave_balance)||0, leaveUsed:r.leave_used||{}, creditYears:r.credit_years||[],
-      accrualAnchor:r.accrual_anchor||null };
+      accrualAnchor:r.accrual_anchor||null, hasAccessCode:!!hasAccessCode };
   }
+  function clearEmployeePrivateData() {
+    for (const e of employees) {
+      for (const key of ['number','phone','startDate','leaveBalance','leaveUsed','creditYears','accrualAnchor','hasAccessCode']) delete e[key];
+    }
+    selectedId = null;
+    if (unlockTimer) clearTimeout(unlockTimer);
+    unlockTimer = null;
+  }
+  function lockPublicView() {
+    clearEmployeePrivateData();
+    document.querySelector('.code-overlay')?.remove();
+    render();
+  }
+  function showCodeDialog(employee, onSubmit) {
+    document.querySelector('.code-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'code-overlay';
+    overlay.innerHTML = '<section class="code-card" role="dialog" aria-modal="true" aria-labelledby="employeeCodeTitle"><h2 id="employeeCodeTitle">عرض بيانات الموظف</h2><p>أدخل الرمز الخاص بـ <strong>' + esc(employee.name) + '</strong>. لن تظهر بيانات بقية الموظفين.</p><form id="employeeCodeForm"><label for="employeeAccessCode">رمز الموظف</label><input id="employeeAccessCode" type="password" inputmode="text" autocomplete="one-time-code" maxlength="32" required><p id="employeeCodeMessage" class="cloud-error" aria-live="polite"></p><div class="code-actions"><button type="submit" id="employeeCodeSubmit">عرض بياناتي</button><button type="button" class="secondary" id="employeeCodeCancel">إلغاء</button></div></form></section>';
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#employeeAccessCode');
+    overlay.querySelector('#employeeCodeCancel').onclick = () => overlay.remove();
+    overlay.onclick = event => { if (event.target === overlay) overlay.remove(); };
+    overlay.querySelector('#employeeCodeForm').onsubmit = async event => {
+      event.preventDefault();
+      const button = overlay.querySelector('#employeeCodeSubmit');
+      const messageNode = overlay.querySelector('#employeeCodeMessage');
+      button.disabled = true;
+      messageNode.textContent = 'جارٍ التحقق من الرمز…';
+      try { await onSubmit(input.value.trim().toUpperCase()); }
+      catch (error) {
+        messageNode.textContent = error?.message || 'الرمز غير صحيح. تحقق منه وحاول مرة أخرى.';
+        button.disabled = false;
+        input.select();
+      }
+    };
+    setTimeout(() => input.focus(), 0);
+  }
+  async function openEmployeeRecord(id) {
+    const target = employees.find(e => e.id === id);
+    if (!target) return;
+    if (selectedId === id && target.number !== undefined) return;
+    clearEmployeePrivateData();
+    render();
+    showCodeDialog(target, async code => {
+      const { data, error } = await client.rpc('verify_employee_access_code', {
+        p_employee_id:id, p_access_code:code
+      });
+      const row = Array.isArray(data) ? data[0] : data;
+      if (error || !row) throw new Error('الرمز غير صحيح، أو لم يعيّن الأدمن رمزاً لهذا الموظف بعد.');
+      const index = employees.findIndex(e => e.id === id);
+      if (index < 0) throw new Error('تعذر العثور على الموظف. حدّث الصفحة وحاول مجدداً.');
+      employees[index] = employeeFromPrivateRow(row, target.name, true);
+      selectedId = id;
+      document.querySelector('.code-overlay')?.remove();
+      render();
+      clearTimeout(unlockTimer);
+      unlockTimer = setTimeout(() => {
+        lockPublicView();
+        toast('تم إخفاء بيانات الموظف تلقائياً');
+      }, 15 * 60 * 1000);
+    });
+  }
+  window.MANAWIB_OPEN_EMPLOYEE = openEmployeeRecord;
+
+  function generateEmployeeCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('');
+  }
+  function showOneTimeCode(employee, code) {
+    document.querySelector('.code-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'code-overlay';
+    overlay.innerHTML = '<section class="code-card" role="dialog" aria-modal="true"><h2>رمز الدخول الخاص بالموظف</h2><p>أرسل هذا الرمز إلى <strong>' + esc(employee.name) + '</strong>. سيظهر الآن مرة واحدة فقط؛ لا يُحفظ الرمز نفسه في قاعدة البيانات.</p><div class="one-time-code" id="newEmployeeCode">' + esc(code) + '</div><p id="copyCodeMessage" class="cloud-note"></p><div class="code-actions"><button type="button" id="copyEmployeeCode">نسخ الرمز</button><button type="button" class="secondary" id="closeEmployeeCode">تم</button></div></section>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('#copyEmployeeCode').onclick = async () => {
+      const messageNode = overlay.querySelector('#copyCodeMessage');
+      try {
+        await navigator.clipboard.writeText(code);
+        messageNode.textContent = 'تم نسخ الرمز. أرسله للموظف بطريقة آمنة.';
+      } catch {
+        messageNode.textContent = 'تعذر النسخ تلقائياً؛ حدّد الرمز وانسخه يدوياً.';
+      }
+    };
+    const close = () => overlay.remove();
+    overlay.querySelector('#closeEmployeeCode').onclick = close;
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+  }
+  async function issueEmployeeCode(employee) {
+    if (!user || !employee?.id) return;
+    const code = generateEmployeeCode();
+    const { error } = await client.rpc('set_employee_access_code', {
+      p_employee_id:employee.id, p_access_code:code
+    });
+    if (error) {
+      toast('تعذر تعيين الرمز. تأكد من تطبيق تحديث قاعدة البيانات ثم أعد المحاولة.');
+      console.error('Could not set employee access code', error);
+      return;
+    }
+    employee.hasAccessCode = true;
+    updateAccessCodeButton();
+    showOneTimeCode(employee, code);
+  }
+  window.MANAWIB_AFTER_EMPLOYEE_SAVE = async (employee, isNew) => {
+    if (user && isNew) await issueEmployeeCode(employee);
+  };
+  function updateAccessCodeButton() {
+    const actions = document.querySelector('#detail .profile .actions');
+    const employee = employees.find(e => e.id === selectedId);
+    const old = document.getElementById('issueCodeBtn');
+    if (!user || !actions || !employee) { old?.remove(); return; }
+    const button = old || document.createElement('button');
+    button.id = 'issueCodeBtn';
+    button.className = 'button soft small-btn';
+    button.type = 'button';
+    button.textContent = employee.hasAccessCode ? 'إعادة تعيين رمز الدخول' : 'تعيين رمز الدخول';
+    button.onclick = () => issueEmployeeCode(employee);
+    if (!old) actions.appendChild(button);
+  }
+  new MutationObserver(updateAccessCodeButton).observe(document.getElementById('detail'), {childList:true,subtree:true});
+  document.addEventListener('visibilitychange', () => {
+    if (user || !selectedId) return;
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      clearTimeout(unlockTimer);
+      unlockTimer = setTimeout(lockPublicView, 5 * 60 * 1000);
+    } else if (hiddenAt) {
+      const hiddenFor = Date.now() - hiddenAt;
+      hiddenAt = null;
+      if (hiddenFor >= 5 * 60 * 1000) lockPublicView();
+      else {
+        clearTimeout(unlockTimer);
+        unlockTimer = setTimeout(() => {
+          lockPublicView();
+          toast('تم إخفاء بيانات الموظف تلقائياً');
+        }, 15 * 60 * 1000);
+      }
+    }
+  });
   function holidayRow(h) { return { id:h.id, name:h.name, start_date:h.start, end_date:h.end, source:h.source||'' }; }
   function holidayFromRow(r) { return { id:r.id, name:r.name, start:r.start_date, end:r.end_date, source:r.source||'' }; }
 
@@ -94,50 +242,77 @@
     baseline.clear();
     current.forEach(item => baseline.set(item.id, toRow(item)));
   }
-  function queueSync(table, items, baseline, toRow) {
-    syncQueue = syncQueue.then(() => syncTable(table, items, baseline, toRow)).catch(err => {
+  function queueEmployeeSave() {
+    const task = syncQueue.then(async () => {
+      await syncTable('employees', employees, employeeBaseline, employeeDirectoryRow);
+      await syncTable('employee_private', employees, privateBaseline, employeePrivateRow);
+    });
+    syncQueue = task.catch(err => {
       console.error('Manawib cloud sync failed', err);
       toast('تعذر حفظ التغيير. تحقق من صلاحية الحساب والاتصال ثم أعد المحاولة.');
     });
+    return task;
   }
   save = function () {
-    oldSave();
-    if (user) queueSync('employees', employees, employeeBaseline, employeeRow);
+    // Public unlocks are memory-only. Employee records are never written to localStorage.
+    if (!user) return Promise.resolve();
+    return queueEmployeeSave().catch(() => undefined);
   };
+  window.MANAWIB_SAVE_EMPLOYEES_STRICT = queueEmployeeSave;
   saveHolidays = function () {
-    oldSaveHolidays();
-    if (user) queueSync('holidays', holidays, holidayBaseline, holidayRow);
+    if (!user) return Promise.resolve();
+    const task = syncQueue.then(() => syncTable('holidays', holidays, holidayBaseline, holidayRow));
+    syncQueue = task.catch(err => {
+      console.error('Manawib holiday sync failed', err);
+      toast('تعذر حفظ العطلة. تحقق من الاتصال والصلاحية.');
+    });
+    return task.catch(() => undefined);
   };
 
   async function loadCloud(importLocal) {
     message('جارٍ تحميل بيانات الفريق…');
     const [employeeResult, holidayResult] = await Promise.all([
-      client.from('employees').select('*').order('name'),
+      client.from('employees').select('id,name').order('name'),
       client.from('holidays').select('*').order('start_date')
     ]);
     if (employeeResult.error) throw employeeResult.error;
     if (holidayResult.error) throw holidayResult.error;
-    const cloudEmployees = employeeResult.data.map(employeeFromRow);
+    const cloudDirectory = employeeResult.data;
     const cloudHolidays = holidayResult.data.map(holidayFromRow);
 
     if (importLocal) {
-      employees = localEmployees;
+      employees = localEmployees.map(e => ({...e}));
       holidays = cloudHolidays.length ? cloudHolidays : localHolidays;
-      await Promise.all([
-        syncTable('employees', employees, employeeBaseline, employeeRow),
-        syncTable('holidays', holidays, holidayBaseline, holidayRow)
-      ]);
+      await syncTable('employees', employees, employeeBaseline, employeeDirectoryRow);
+      await syncTable('employee_private', employees, privateBaseline, employeePrivateRow);
+      await syncTable('holidays', holidays, holidayBaseline, holidayRow);
     } else {
-      employees = cloudEmployees;
+      if (user) {
+        const privateResult = await client.from('employee_private')
+          .select('id,number,phone,start_date,leave_balance,leave_used,credit_years,accrual_anchor,has_access_code')
+          .order('id');
+        if (privateResult.error) throw privateResult.error;
+        const privateById = new Map(privateResult.data.map(r => [r.id, r]));
+        employees = cloudDirectory.map(row => {
+          const record = privateById.get(row.id);
+          return record ? employeeFromPrivateRow(record, row.name, record.has_access_code) : {id:row.id,name:row.name};
+        });
+        privateBaseline = new Map(employees.filter(e => e.number !== undefined).map(e => [e.id, employeePrivateRow(e)]));
+      } else {
+        employees = cloudDirectory.map(({id,name}) => ({id,name}));
+        privateBaseline.clear();
+      }
       holidays = cloudHolidays.length ? cloudHolidays : officialHolidays();
-      employeeBaseline = new Map(employees.map(e => [e.id, employeeRow(e)]));
+      employeeBaseline = new Map(employees.map(e => [e.id, employeeDirectoryRow(e)]));
       holidayBaseline = new Map(cloudHolidays.map(h => [h.id, holidayRow(h)]));
       if (user && !cloudHolidays.length && holidays.length) {
         await syncTable('holidays', holidays, holidayBaseline, holidayRow);
       }
     }
-    selectedId = employees[0]?.id || null;
-    oldSave(); oldSaveHolidays();
+    selectedId = user ? (employees[0]?.id || null) : null;
+    // Drop any stale per-device copy left by an older application release.
+    localStorage.removeItem('manawib_employees_v1');
+    localStorage.removeItem('manawib_oman_holidays_v1');
     startApp();
   }
 
@@ -171,7 +346,7 @@
   function showLogin(errorText) {
     const returnButton = document.querySelector('.shell').style.display !== 'none'
       ? '<button type="button" class="secondary" id="returnToView">العودة للعرض</button>' : '';
-    show('<h1>دخول للتعديل</h1><p>عرض الأسماء والجداول متاح للجميع. سجّل الدخول أو أنشئ حساباً؛ التعديل متاح للحسابات المعتمدة فقط.</p><form id="cloudLogin"><label for="cloudEmail">البريد الإلكتروني</label><input id="cloudEmail" type="email" autocomplete="username" required><label for="cloudPassword">كلمة المرور</label><input id="cloudPassword" type="password" autocomplete="new-password" minlength="6" required><p id="cloudMessage" class="cloud-error"></p><div class="cloud-actions"><button id="cloudLoginButton" type="submit">دخول</button><button id="cloudSignUpButton" class="secondary" type="button">إنشاء حساب</button>'+returnButton+'</div></form>');
+    show('<h1>دخول الأدمن للتعديل</h1><p>الأسماء ظاهرة للجميع. بيانات الموظف تظهر له بعد إدخال رمزه الخاص، وإدارة بيانات الفريق والرموز متاحة للأدمن المعتمد فقط.</p><form id="cloudLogin"><label for="cloudEmail">البريد الإلكتروني</label><input id="cloudEmail" type="email" autocomplete="username" required><label for="cloudPassword">كلمة المرور</label><input id="cloudPassword" type="password" autocomplete="new-password" minlength="6" required><p id="cloudMessage" class="cloud-error"></p><div class="cloud-actions"><button id="cloudLoginButton" type="submit">دخول</button><button id="cloudSignUpButton" class="secondary" type="button">إنشاء حساب</button>'+returnButton+'</div></form>');
     const back = document.getElementById('returnToView');
     if (back) back.onclick = () => { gate.hidden = true; };
     document.getElementById('cloudSignUpButton').onclick = async () => {
@@ -254,8 +429,15 @@
     client.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         user = null;
+        window.MANAWIB_DIRECTORY_MODE = true;
+        window.MANAWIB_IS_EDITOR = false;
+        clearEmployeePrivateData();
+        employeeBaseline.clear();
+        privateBaseline.clear();
+        localStorage.removeItem('manawib_employees_v1');
         document.getElementById('modalBack')?.classList.remove('show');
         document.getElementById('holidayModal')?.classList.remove('show');
+        document.querySelector('.code-overlay')?.remove();
         renderAccountControl();
         render();
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {

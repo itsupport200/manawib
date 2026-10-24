@@ -51,7 +51,7 @@
     document.getElementById('leaveBalanceInput').value = employee ? remaining(employee): ANNUAL;
     document.getElementById('balanceDateInput').value = employee?.accrualAnchor || iso(new Date());
   };
-  form.onsubmit = function(event) {
+  form.onsubmit = async function(event) {
     event.preventDefault();
     const name = document.getElementById('name').value.trim();
     const number = document.getElementById('number').value.trim();
@@ -68,12 +68,15 @@
       return
     }
     if (date(startDate).getDay() !== 6 && !confirm('التاريخ المحدد ليس يوم سبت. هل تريد المتابعة؟'))return;
+    const isNewEmployee = !editingId;
+    let savedEmployee;
     if (editingId) {
       const employee = employees.find(e => e.id === editingId);
       Object.assign(employee, {
         name, number, phone, startDate, leaveBalance, accrualAnchor: balanceDate
       });
       syncCredits(employee);
+      savedEmployee = employee;
     }
     else {
       const employee = {
@@ -83,11 +86,17 @@
       syncCredits(employee);
       employees.unshift(employee);
       selectedId = employee.id;
+      savedEmployee = employee;
     }
-    save();
+    try {
+      const saveOperation = window.MANAWIB_SAVE_EMPLOYEES_STRICT || save;
+      await saveOperation();
+    }
+    catch { toast('لم تُحفظ البيانات. تحقق من الاتصال ثم أعد المحاولة.'); return; }
     closeModal();
     render();
     toast(editingId ? 'تم تحديث البيانات': 'تمت إضافة الموظف');
+    if (window.MANAWIB_AFTER_EMPLOYEE_SAVE) await window.MANAWIB_AFTER_EMPLOYEE_SAVE(savedEmployee, isNewEmployee);
   };
   // Add the forecast, calendar, and holidays to employee details.
   const oldRenderDetail = renderDetail;

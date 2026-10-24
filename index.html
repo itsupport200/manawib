@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f7f4">
+  <script>window.MANAWIB_DIRECTORY_MODE = true;</script>
   <title>مناوب | إدارة الموظفين والشفتات</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./app.css?v=20261019-add-employee-button">
+  <link rel="stylesheet" href="./app.css?v=20261024-employee-private">
 </head>
 <body>
   <div class="shell">
@@ -27,7 +28,7 @@
       <div>
         <div class="eyebrow">لوحة إدارة الفريق</div>
         <h1>أهلاً بك 👋</h1>
-        <p>تابع بيانات الموظفين، رصيد الإجازات، ومواعيد الشفتات من مكان واحد.</p>
+        <p>اختر اسم الموظف، وأدخل رمزه الخاص لعرض بياناته فقط.</p>
       </div>
       <button class="button primary" id="addBtn">＋ إضافة موظف</button>
     </section>
@@ -60,13 +61,13 @@
         <div class="panel-head">
           <div>
             <h2 id="employeeListTitle">الموظفون</h2>
-            <p>اختر موظفاً لعرض تفاصيله</p>
+          <p>تظهر بيانات كل موظف له وحده بعد إدخال رمزه</p>
           </div>
           <button class="button soft small-btn" id="quickAdd">＋ جديد</button>
         </div>
         <div class="search">
           <span>⌕</span>
-          <input id="search" placeholder="ابحث بالاسم أو الرقم..." aria-label="البحث عن موظف">
+          <input id="search" placeholder="ابحث باسم الموظف..." aria-label="البحث عن موظف">
         </div>
         <div class="employee-list" id="employees"></div>
       </aside>
@@ -111,6 +112,7 @@
           <p class="form-note">
             يفضل اختيار يوم السبت، الساعة 6:00 صباحاً. سيُنشأ الجدول على أساس 14 يوم دوام ثم 14 يوم إجازة.
             الرصيد السنوي المدفوع 30 يوماً، ويمكن تسجيل الأيام المستخدمة من صفحة الموظف.
+            بعد الإضافة ينشئ النظام رمزاً خاصاً يظهر للأدمن مرة واحدة لتسليمه للموظف.
           </p>
         </div>
         <div class="modal-actions">
@@ -124,10 +126,10 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Application code is split by responsibility; keep this load order. -->
-  <script src="./app-core.js?v=20261019-add-employee-button"></script>
-  <script src="./employee-features.js?v=20261019-structure"></script>
+  <script src="./app-core.js?v=20261024-employee-private"></script>
+  <script src="./employee-features.js?v=20261024-employee-private"></script>
   <script src="./cloud-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-sync.js?v=20261019-structure"></script>
+  <script src="./cloud-sync.js?v=20261024-employee-private"></script>
 </body>
 </html>

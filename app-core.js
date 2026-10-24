@@ -1,6 +1,6 @@
 // Employee data and storage.
 const STORE = 'manawib_employees_v1', ANNUAL = 30;
-let employees = load(), selectedId = employees[0]?.id || null, editingId = null;
+let employees = load(), selectedId = window.MANAWIB_DIRECTORY_MODE ? null : (employees[0]?.id || null), editingId = null;
 
 function load() {
   try {
@@ -129,12 +129,24 @@ function remaining(e) {
 
 // Dashboard and employee details.
 function render() {
-  const term = document.getElementById('search').value.trim().toLowerCase(), filtered = employees.filter(e => (e.name + ' ' + e.number + ' ' + (e.phone || '')).toLowerCase().includes(term));
-  document.getElementById('employees').innerHTML = filtered.length ? filtered.map(e => `<button class="employee ${e.id===selectedId?'active':''}" data-id="${e.id}"><span class="avatar">${esc(initials(e.name))}</span><span class="emp-main"><strong>${esc(e.name)}</strong><small>الرقم الوظيفي: ${esc(e.number)}</small></span><span class="leave-count">${remaining(e)} يوم</span></button>`).join(''): '<div class="empty-list">لا يوجد موظفون مطابقون. أضف موظفاً للبدء.</div>';
+  const directoryOnly = !!window.MANAWIB_DIRECTORY_MODE;
+  document.body.classList.toggle('directory-mode', directoryOnly);
+  const term = document.getElementById('search').value.trim().toLowerCase();
+  const filtered = employees.filter(e => directoryOnly
+    ? e.name.toLowerCase().includes(term)
+    : (e.name + ' ' + e.number + ' ' + (e.phone || '')).toLowerCase().includes(term));
+  document.getElementById('employees').innerHTML = filtered.length ? filtered.map(e => `<button class="employee ${e.id===selectedId?'active':''}" data-id="${e.id}"><span class="avatar">${esc(initials(e.name))}</span><span class="emp-main"><strong>${esc(e.name)}</strong>${directoryOnly?'':'<small>الرقم الوظيفي: '+esc(e.number)+'</small>'}</span>${directoryOnly?'':'<span class="leave-count">'+remaining(e)+' يوم</span>'}</button>`).join(''): '<div class="empty-list">لا يوجد موظفون مطابقون.</div>';
   document.querySelectorAll('.employee').forEach(b => b.onclick = () => {
+    if (window.MANAWIB_DIRECTORY_MODE && window.MANAWIB_OPEN_EMPLOYEE) {
+      window.MANAWIB_OPEN_EMPLOYEE(b.dataset.id);
+      return;
+    }
     selectedId = b.dataset.id;
     render()
   });
+  document.querySelector('.stats').hidden = directoryOnly;
+  document.getElementById('addBtn').hidden = directoryOnly;
+  document.getElementById('quickAdd').hidden = directoryOnly;
   let on = employees.filter(e => cycle(e) === 'on').length;
   document.getElementById('statEmployees').textContent = employees.length;
   document.getElementById('statOn').textContent = on;
@@ -163,8 +175,10 @@ function shifts(e, y) {
 function renderDetail() {
   const host = document.getElementById('detail'), e = employees.find(x => x.id === selectedId);
   if (!e) {
-    host.innerHTML = '<div class="empty"><div class="icon">👥</div><h3>ابدأ بإضافة موظفيك</h3><p>أدخل اسم الموظف ورقمه وتاريخ بداية شفته القادم لعرض جدول دوامه.</p><button class="button primary" id="emptyAdd">＋ إضافة أول موظف</button></div>';
-    document.getElementById('emptyAdd').onclick = () => openModal();
+    host.innerHTML = window.MANAWIB_DIRECTORY_MODE
+      ? '<div class="empty"><div class="icon">🔐</div><h3>بيانات الموظف محمية</h3><p>اختر اسمك من القائمة، ثم أدخل رمزك الخاص لعرض بياناتك فقط.</p></div>'
+      : '<div class="empty"><div class="icon">👥</div><h3>ابدأ بإضافة موظفيك</h3><p>أدخل اسم الموظف ورقمه وتاريخ بداية شفته القادم لعرض جدول دوامه.</p><button class="button primary" id="emptyAdd">＋ إضافة أول موظف</button></div>';
+    if (!window.MANAWIB_DIRECTORY_MODE) document.getElementById('emptyAdd').onclick = () => openModal();
     return
   }
   const y = +(window.displayYear || yearNow()), r = remaining(e), u = used(e), arr = shifts(e, y);
