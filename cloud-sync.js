@@ -4,6 +4,7 @@
 
   const url = window.MANAWIB_SUPABASE_URL || '';
   const key = window.MANAWIB_SUPABASE_KEY || '';
+  const localPreview = window.location.protocol === 'file:';
   const localEmployees = JSON.parse(JSON.stringify(employees));
   const localHolidays = JSON.parse(JSON.stringify(holidays));
   let client, user = null;
@@ -16,19 +17,77 @@
   const style = document.createElement('style');
   style.textContent = '.cloud-gate{position:fixed;inset:0;z-index:20;background:#f5f7f4ed;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif;color:#20312d}.cloud-card{width:min(460px,100%);background:#fff;border:1px solid #e5ebe7;border-radius:18px;padding:24px;box-shadow:0 12px 36px #253c3010}.cloud-card h1{font-size:21px;margin:0 0 8px}.cloud-card p{font-size:14px;line-height:1.8;color:#71817b}.cloud-card label{display:block;font-size:13px;margin:12px 0 5px}.cloud-card input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #dce4de;border-radius:9px;font:inherit}.cloud-card button{border:0;border-radius:9px;padding:11px 15px;background:#16795b;color:white;font:inherit;cursor:pointer;margin-top:14px}.cloud-card button.secondary{background:#e9f4ee;color:#16795b;margin-right:6px}.cloud-card button:disabled{opacity:.55;cursor:wait}.cloud-error{color:#aa3936!important}.cloud-note{font-size:12px!important}.cloud-actions{display:flex;flex-wrap:wrap;gap:6px}.cloud-gate[hidden]{display:none}.cloud-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cloud-controls .button{white-space:nowrap}.directory-mode .stats,.directory-mode #addBtn,.directory-mode #quickAdd,.directory-mode #emptyAdd,.directory-mode #detail .profile .actions{display:none!important}.code-overlay{position:fixed;inset:0;z-index:19;background:#13272080;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif}.code-card{width:min(410px,100%);background:#fff;border-radius:18px;padding:22px;box-shadow:0 16px 50px #13272030}.code-card h2{margin:0 0 8px;font-size:20px}.code-card p{color:#6a7b74;line-height:1.8;font-size:14px}.code-card input{box-sizing:border-box;width:100%;padding:13px;border:1px solid #dce4de;border-radius:10px;font:inherit;letter-spacing:.12em;text-transform:uppercase}.code-card .code-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.code-card button{border:0;border-radius:9px;padding:10px 14px;background:#16795b;color:white;font:inherit;cursor:pointer}.code-card button.secondary{background:#edf3ef;color:#456057}.one-time-code{font-size:22px!important;font-weight:700;letter-spacing:.16em;text-align:center;padding:14px;background:#f1f7f3;border-radius:10px;color:#16795b!important;direction:ltr}.directory-mode .employee .emp-main small,.directory-mode .employee .leave-count{display:none!important}';
   document.head.appendChild(style);
-  document.querySelector('.shell').style.display = 'none';
+  style.textContent += '.cloud-status{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 20px;padding:10px 12px;border-radius:10px;background:#fff1ef;color:#8c3430;font-size:13px}.cloud-status button{border:0;border-radius:8px;padding:7px 11px;background:#16795b;color:#fff;font:inherit;white-space:nowrap}';
   // A previous release cached complete employee records locally. Keep the snapshot
   // only for an explicit administrator import and remove the browser copy afterwards.
   localStorage.removeItem('manawib_employees_v1');
   localStorage.removeItem('manawib_oman_holidays_v1');
   const gate = document.createElement('main');
   gate.className = 'cloud-gate';
+  gate.hidden = true;
   document.body.appendChild(gate);
 
   function show(html) { gate.innerHTML = '<section class="cloud-card">' + html + '</section>'; gate.hidden = false; }
   function message(text, error) {
     const el = document.getElementById('cloudMessage');
     if (el) { el.textContent = text; el.className = error ? 'cloud-error' : 'cloud-note'; }
+  }
+  function showConnectionStatus(text, retry = false) {
+    const shell = document.querySelector('.shell');
+    let status = document.getElementById('cloudStatus');
+    if (!status) {
+      status = document.createElement('div');
+      status.id = 'cloudStatus';
+      status.className = 'cloud-status';
+      status.setAttribute('role','status');
+      shell.insertBefore(status, shell.children[1] || null);
+    }
+    status.replaceChildren();
+    const label = document.createElement('span');
+    label.textContent = text;
+    status.appendChild(label);
+    if (retry) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'إعادة المحاولة';
+      button.onclick = () => boot();
+      status.appendChild(button);
+    }
+  }
+  function withTimeout(promise, milliseconds = 15000) {
+    let timer;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('تعذر تحديث البيانات حالياً.')), milliseconds);
+      })
+    ]).finally(() => clearTimeout(timer));
+  }
+  function readPublicCache() {
+    try {
+      const cached = JSON.parse(localStorage.getItem('manawib_public_cache_v1') || 'null');
+      if (!cached || !Array.isArray(cached.employees)) return null;
+      return {
+        employees: cached.employees.filter(e => e && typeof e.id === 'string' && typeof e.name === 'string')
+          .map(({id,name}) => ({id,name})),
+        holidays: Array.isArray(cached.holidays)
+          ? cached.holidays.filter(h => h && typeof h.name === 'string' && typeof h.start === 'string' && typeof h.end === 'string')
+              .map(h => ({id:h.id,name:h.name,start:h.start,end:h.end,source:h.source||''}))
+          : officialHolidays()
+      };
+    } catch { return null; }
+  }
+  function savePublicCache() {
+    try {
+      localStorage.setItem('manawib_public_cache_v1', JSON.stringify({
+        employees: employees.filter(e => e && typeof e.name === 'string').map(({id,name}) => ({id,name})),
+        holidays: holidays.map(h => ({id:h.id,name:h.name,start:h.start,end:h.end,source:h.source||''}))
+      }));
+    } catch { /* The live directory still works if storage is unavailable. */ }
+  }
+  function showPublicError(errorText) {
+    startApp();
+    showConnectionStatus(errorText || 'تعذر تحديث البيانات. تحقق من الاتصال ثم أعد المحاولة.', true);
   }
   function renderAccountControl() {
     const topbar = document.querySelector('.topbar');
@@ -41,7 +100,7 @@
       topbar.appendChild(controls);
     }
     controls.appendChild(localBadge);
-    localBadge.textContent = user ? 'وضع التعديل مفعّل' : 'متاح للعرض · الدخول للتعديل';
+    localBadge.textContent = localPreview ? 'معاينة محلية · عرض فقط' : user ? 'وضع التعديل مفعّل' : 'متاح للعرض · الدخول للتعديل';
     let button = document.getElementById('cloudAccountButton');
     if (!button) {
       button = document.createElement('button');
@@ -50,7 +109,11 @@
       controls.appendChild(button);
     }
     button.textContent = user ? 'تسجيل الخروج' : 'دخول للتعديل';
-    button.onclick = () => user ? client.auth.signOut() : showLogin();
+    button.hidden = localPreview;
+    button.onclick = () => {
+      if (!client) return;
+      user ? client.auth.signOut() : showLogin();
+    };
   }
   function resumePendingAction() {
     const action = pendingAction;
@@ -65,7 +128,6 @@
     gate.hidden = true;
     renderAccountControl();
     render();
-    renderDetail();
     updateAccessCodeButton();
     document.title = 'مناوب | إدارة الموظفين والشفتات';
     resumePendingAction();
@@ -119,6 +181,7 @@
     setTimeout(() => input.focus(), 0);
   }
   async function openEmployeeRecord(id) {
+    if (localPreview || !client) return;
     const target = employees.find(e => e.id === id);
     if (!target) return;
     if (selectedId === id && target.number !== undefined) return;
@@ -271,10 +334,10 @@
 
   async function loadCloud(importLocal) {
     message('جارٍ تحميل بيانات الفريق…');
-    const [employeeResult, holidayResult] = await Promise.all([
+    const [employeeResult, holidayResult] = await withTimeout(Promise.all([
       client.from('employees').select('id,name').order('name'),
       client.from('holidays').select('*').order('start_date')
-    ]);
+    ]));
     if (employeeResult.error) throw employeeResult.error;
     if (holidayResult.error) throw holidayResult.error;
     const cloudDirectory = employeeResult.data;
@@ -288,9 +351,9 @@
       await syncTable('holidays', holidays, holidayBaseline, holidayRow);
     } else {
       if (user) {
-        const privateResult = await client.from('employee_private')
+        const privateResult = await withTimeout(client.from('employee_private')
           .select('id,number,phone,start_date,leave_balance,leave_used,credit_years,accrual_anchor,has_access_code')
-          .order('id');
+          .order('id'));
         if (privateResult.error) throw privateResult.error;
         const privateById = new Map(privateResult.data.map(r => [r.id, r]));
         employees = cloudDirectory.map(row => {
@@ -316,6 +379,34 @@
     startApp();
   }
 
+  async function loadPublicDirectory() {
+    const employeeResult = await withTimeout(
+      client.from('employees').select('id,name').order('name')
+    );
+    if (employeeResult.error) throw employeeResult.error;
+    employees = employeeResult.data.map(({id,name}) => ({id,name}));
+    selectedId = null;
+    privateBaseline.clear();
+    employeeBaseline = new Map(employees.map(e => [e.id, employeeDirectoryRow(e)]));
+    if (!holidays?.length) holidays = officialHolidays();
+    savePublicCache();
+    startApp();
+
+    try {
+      const holidayResult = await withTimeout(
+        client.from('holidays').select('*').order('start_date')
+      );
+      if (holidayResult.error) throw holidayResult.error;
+      const cloudHolidays = holidayResult.data.map(holidayFromRow);
+      holidays = cloudHolidays.length ? cloudHolidays : officialHolidays();
+      holidayBaseline = new Map(cloudHolidays.map(h => [h.id, holidayRow(h)]));
+      savePublicCache();
+      renderDetail();
+    } catch (error) {
+      console.warn('Manawib holiday refresh failed', error);
+    }
+  }
+
   function showImportChoice() {
     show('<h1>قاعدة الفريق جاهزة</h1><p>وجدت بيانات محفوظة على هذا الجهاز. اختر هل تنقلها إلى قاعدة الفريق المشتركة أم تبدأ بقاعدة فارغة. لن تُرفع البيانات إلا بعد اختيارك.</p><p id="cloudMessage" class="cloud-note"></p><div class="cloud-actions"><button id="importLocal">نقل بيانات هذا الجهاز إلى الفريق</button><button class="secondary" id="startEmpty">ابدأ بقاعدة فارغة</button></div>');
     document.getElementById('importLocal').onclick = () => loadCloud(true).catch(e => message(e.message, true));
@@ -324,7 +415,7 @@
   async function prepareEditor(session) {
     user = session.user;
     try {
-      const { data: allowed, error: permissionError } = await client.rpc('can_edit_manawib');
+      const { data: allowed, error: permissionError } = await withTimeout(client.rpc('can_edit_manawib'));
       if (permissionError) throw permissionError;
       if (!allowed) {
         user = null;
@@ -333,7 +424,7 @@
         showLogin('هذا الحساب غير مصرح له بالتعديل. اطلب من المسؤول إضافته.');
         return;
       }
-      const { data, error } = await client.from('employees').select('id').limit(1);
+      const { data, error } = await withTimeout(client.from('employees').select('id').limit(1));
       if (error) throw error;
       if (!data.length && localEmployees.length) { showImportChoice(); return; }
       await loadCloud(false);
@@ -417,12 +508,16 @@
   }, true);
 
   async function boot() {
+    if (localPreview) {
+      startApp();
+      return;
+    }
     if (!url.startsWith('https://') || !key || key.includes('PASTE_')) {
-      show('<h1>قاعدة الفريق لم تُربط بعد</h1><p id="cloudMessage" class="cloud-error">تعذر العثور على إعدادات Supabase.</p>');
+      showPublicError('تعذر الاتصال بمصدر بيانات الفريق.');
       return;
     }
     if (!window.supabase?.createClient) {
-      show('<h1>تعذر تحميل خدمة قاعدة البيانات</h1><p id="cloudMessage" class="cloud-error">تحقق من اتصال الإنترنت ثم حدّث الصفحة.</p>');
+      showPublicError('تعذر تحميل خدمة قاعدة البيانات.');
       return;
     }
     client = window.supabase.createClient(url, key, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
@@ -444,24 +539,30 @@
         user = session.user;
       }
     });
-    const { data:{session}, error } = await client.auth.getSession();
+    startApp();
+    const { data:{session}, error } = await withTimeout(client.auth.getSession());
     if (error) throw error;
     if (session?.user && !session.user.is_anonymous) {
       await prepareEditor(session);
       return;
     }
     if (session?.user?.is_anonymous) await client.auth.signOut();
+    const cache = readPublicCache();
+    if (cache) {
+      employees = cache.employees;
+      holidays = cache.holidays;
+      selectedId = null;
+      startApp();
+    }
     try {
-      await loadCloud(false);
+      await loadPublicDirectory();
     } catch (e) {
-      show('<h1>تعذر تحميل البيانات العامة</h1><p id="cloudMessage" class="cloud-error"></p><button id="retryPublic">إعادة المحاولة</button>');
-      message(e.message || 'تحقق من إعداد القراءة العامة في قاعدة البيانات.', true);
-      document.getElementById('retryPublic').onclick = () => boot().catch(err => message(err.message, true));
+      if (cache) showConnectionStatus(e.message || 'تعذر تحديث القائمة المحفوظة.', true);
+      else showPublicError(e.message || 'تعذر تحديث البيانات.');
     }
   }
   boot().catch(e => {
-    show('<h1>تعذر الاتصال</h1><p id="cloudMessage" class="cloud-error"></p>');
-    message(e.message || 'تحقق من إعداد Supabase.', true);
+    showPublicError(e.message || 'تعذر تحديث البيانات. تحقق من الاتصال ثم أعد المحاولة.');
   });
   // Add email recovery and reset flows to the public login screen.
   function appRedirectUrl() {
