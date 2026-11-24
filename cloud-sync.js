@@ -317,7 +317,10 @@
     button.id = 'issueCodeBtn';
     button.className = 'button soft small-btn';
     button.type = 'button';
-    button.textContent = employee.hasAccessCode ? 'إعادة تعيين رمز الدخول' : 'تعيين رمز الدخول';
+    const label = employee.hasAccessCode ? 'إعادة تعيين رمز الدخول' : 'تعيين رمز الدخول';
+    // This button is inside the observed #detail subtree. Avoid replacing its
+    // text node on every observer callback, which would trigger an endless loop.
+    if (button.textContent !== label) button.textContent = label;
     button.onclick = () => issueEmployeeCode(employee);
     if (!old) actions.appendChild(button);
   }
