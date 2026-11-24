@@ -114,6 +114,10 @@ button {
   gap: 7px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .primary {
   background: var(--green);
   color: white;
