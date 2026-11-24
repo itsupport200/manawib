@@ -130,18 +130,29 @@
     (function () {
       var loadCloudSync = function () {
         var app = document.createElement('script');
-        app.src = './cloud-sync.js?v=20261124-backup';
+        app.src = './cloud-sync.js?v=20261124-interactions';
         document.body.appendChild(app);
       };
       if (window.location.protocol === 'file:') {
         loadCloudSync();
         return;
       }
-      var supabase = document.createElement('script');
-      supabase.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-      supabase.onload = loadCloudSync;
-      supabase.onerror = loadCloudSync;
-      document.head.appendChild(supabase);
+      var sdkSources = [
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+        'https://unpkg.com/@supabase/supabase-js@2'
+      ];
+      var loadSdk = function (index) {
+        if (index >= sdkSources.length) { loadCloudSync(); return; }
+        var sdk = document.createElement('script');
+        sdk.src = sdkSources[index];
+        sdk.onload = function () {
+          if (window.supabase && window.supabase.createClient) loadCloudSync();
+          else loadSdk(index + 1);
+        };
+        sdk.onerror = function () { loadSdk(index + 1); };
+        document.head.appendChild(sdk);
+      };
+      loadSdk(0);
     })();
   </script>
 </body>

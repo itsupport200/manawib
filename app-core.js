@@ -145,8 +145,10 @@ function render() {
     render()
   });
   document.querySelector('.stats').hidden = directoryOnly;
-  document.getElementById('addBtn').hidden = directoryOnly;
-  document.getElementById('quickAdd').hidden = directoryOnly;
+  // Keep the add actions visible in directory mode. cloud-sync intercepts them
+  // and asks the administrator to sign in before opening the form.
+  document.getElementById('addBtn').hidden = false;
+  document.getElementById('quickAdd').hidden = false;
   let on = employees.filter(e => cycle(e) === 'on').length;
   document.getElementById('statEmployees').textContent = employees.length;
   document.getElementById('statOn').textContent = on;
@@ -176,9 +178,11 @@ function renderDetail() {
   const host = document.getElementById('detail'), e = employees.find(x => x.id === selectedId);
   if (!e) {
     host.innerHTML = window.MANAWIB_DIRECTORY_MODE
-      ? '<div class="empty"><div class="icon">🔐</div><h3>بيانات الموظف محمية</h3><p>اختر اسمك من القائمة، ثم أدخل رمزك الخاص لعرض بياناتك فقط.</p></div>'
+      ? employees.length
+        ? '<div class="empty"><div class="icon">🔐</div><h3>بيانات الموظف محمية</h3><p>اختر اسمك من القائمة، ثم أدخل رمزك الخاص لعرض بياناتك فقط.</p></div>'
+        : '<div class="empty"><div class="icon">👥</div><h3>لا توجد أسماء موظفين بعد</h3><p>اضغط هنا أو على «إضافة موظف» للدخول وإضافة أول موظف.</p><button class="button primary" id="emptyAdd">＋ إضافة أول موظف</button></div>'
       : '<div class="empty"><div class="icon">👥</div><h3>ابدأ بإضافة موظفيك</h3><p>أدخل اسم الموظف ورقمه وتاريخ بداية شفته القادم لعرض جدول دوامه.</p><button class="button primary" id="emptyAdd">＋ إضافة أول موظف</button></div>';
-    if (!window.MANAWIB_DIRECTORY_MODE) document.getElementById('emptyAdd').onclick = () => openModal();
+    if (document.getElementById('emptyAdd')) document.getElementById('emptyAdd').onclick = () => openModal();
     return
   }
   const y = +(window.displayYear || yearNow()), r = remaining(e), u = used(e), arr = shifts(e, y);
