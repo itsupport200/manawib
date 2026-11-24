@@ -114,6 +114,64 @@
       if (!client) return;
       user ? client.auth.signOut() : showLogin();
     };
+    let backupButton = document.getElementById('cloudBackupButton');
+    if (!backupButton) {
+      backupButton = document.createElement('button');
+      backupButton.id = 'cloudBackupButton';
+      backupButton.className = 'button soft small-btn';
+      backupButton.type = 'button';
+      backupButton.textContent = 'تنزيل نسخة احتياطية';
+      controls.appendChild(backupButton);
+    }
+    backupButton.hidden = localPreview || !user;
+    backupButton.onclick = () => downloadBackup(backupButton);
+  }
+  async function downloadBackup(button) {
+    if (!user || !client) return;
+    button.disabled = true;
+    try {
+      await queueEmployeeSave();
+      const holidayTask = syncQueue.then(() => syncTable('holidays', holidays, holidayBaseline, holidayRow));
+      syncQueue = holidayTask.catch(err => console.error('Manawib backup sync failed', err));
+      await holidayTask;
+
+      const [directoryResult, privateResult, holidayResult] = await Promise.all([
+        client.from('employees').select('id,name').order('name'),
+        client.from('employee_private').select('id,number,phone,start_date,leave_balance,leave_used,credit_years,accrual_anchor,has_access_code').order('id'),
+        client.from('holidays').select('*').order('start_date')
+      ]);
+      for (const result of [directoryResult, privateResult, holidayResult]) {
+        if (result.error) throw result.error;
+      }
+      const privateById = new Map(privateResult.data.map(row => [row.id, row]));
+      const payload = {
+        format: 'manawib-backup',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        employees: directoryResult.data.map(row => {
+          const details = privateById.get(row.id);
+          return details
+            ? { ...employeeFromPrivateRow(details, row.name, details.has_access_code) }
+            : { id:row.id, name:row.name };
+        }),
+        holidays: holidayResult.data.map(holidayFromRow)
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = 'manawib-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+      toast('تم تنزيل النسخة الاحتياطية من قاعدة البيانات');
+    } catch (error) {
+      console.error('Manawib backup failed', error);
+      toast('تعذر إنشاء النسخة الاحتياطية. لم يتم تنزيل ملف ناقص.');
+    } finally {
+      button.disabled = false;
+    }
   }
   function resumePendingAction() {
     const action = pendingAction;
