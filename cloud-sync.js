@@ -15,7 +15,7 @@
   let hiddenAt = null;
 
   const style = document.createElement('style');
-  style.textContent = '.cloud-gate{position:fixed;inset:0;z-index:20;background:#f5f7f4ed;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif;color:#20312d}.cloud-card{width:min(460px,100%);background:#fff;border:1px solid #e5ebe7;border-radius:18px;padding:24px;box-shadow:0 12px 36px #253c3010}.cloud-card h1{font-size:21px;margin:0 0 8px}.cloud-card p{font-size:14px;line-height:1.8;color:#71817b}.cloud-card label{display:block;font-size:13px;margin:12px 0 5px}.cloud-card input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #dce4de;border-radius:9px;font:inherit}.cloud-card button{border:0;border-radius:9px;padding:11px 15px;background:#16795b;color:white;font:inherit;cursor:pointer;margin-top:14px}.cloud-card button.secondary{background:#e9f4ee;color:#16795b;margin-right:6px}.cloud-card button:disabled{opacity:.55;cursor:wait}.cloud-error{color:#aa3936!important}.cloud-note{font-size:12px!important}.cloud-actions{display:flex;flex-wrap:wrap;gap:6px}.cloud-gate[hidden]{display:none}.cloud-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cloud-controls .button{white-space:nowrap}.directory-mode .stats,.directory-mode #detail .profile .actions{display:none!important}.code-overlay{position:fixed;inset:0;z-index:19;background:#13272080;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif}.code-card{width:min(410px,100%);background:#fff;border-radius:18px;padding:22px;box-shadow:0 16px 50px #13272030}.code-card h2{margin:0 0 8px;font-size:20px}.code-card p{color:#6a7b74;line-height:1.8;font-size:14px}.code-card input{box-sizing:border-box;width:100%;padding:13px;border:1px solid #dce4de;border-radius:10px;font:inherit;letter-spacing:.12em;text-transform:uppercase}.code-card .code-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.code-card button{border:0;border-radius:9px;padding:10px 14px;background:#16795b;color:white;font:inherit;cursor:pointer}.code-card button.secondary{background:#edf3ef;color:#456057}.one-time-code{font-size:22px!important;font-weight:700;letter-spacing:.16em;text-align:center;padding:14px;background:#f1f7f3;border-radius:10px;color:#16795b!important;direction:ltr}.directory-mode .employee .emp-main small,.directory-mode .employee .leave-count{display:none!important}';
+  style.textContent = '.cloud-gate{position:fixed;inset:0;z-index:20;background:#f5f7f4ed;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif;color:#20312d}.cloud-card{width:min(460px,100%);background:#fff;border:1px solid #e5ebe7;border-radius:18px;padding:24px;box-shadow:0 12px 36px #253c3010}.cloud-card h1{font-size:21px;margin:0 0 8px}.cloud-card p{font-size:14px;line-height:1.8;color:#71817b}.cloud-card label{display:block;font-size:13px;margin:12px 0 5px}.cloud-card input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #dce4de;border-radius:9px;font:inherit}.cloud-card button{border:0;border-radius:9px;padding:11px 15px;background:#16795b;color:white;font:inherit;cursor:pointer;margin-top:14px}.cloud-card button.secondary{background:#e9f4ee;color:#16795b;margin-right:6px}.cloud-card button:disabled{opacity:.55;cursor:wait}.cloud-error{color:#aa3936!important}.cloud-note{font-size:12px!important}.cloud-actions{display:flex;flex-wrap:wrap;gap:6px}.cloud-gate[hidden]{display:none}.cloud-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.cloud-controls .button{white-space:nowrap}.directory-mode .stats,.directory-mode #detail .profile .actions{display:none!important}.code-overlay{position:fixed;inset:0;z-index:19;background:#13272080;display:grid;place-items:center;padding:18px;direction:rtl;font-family:Tahoma,Arial,sans-serif}.code-card{width:min(410px,100%);background:#fff;border-radius:18px;padding:22px;box-shadow:0 16px 50px #13272030}.code-card h2{margin:0 0 8px;font-size:20px}.code-card p{color:#6a7b74;line-height:1.8;font-size:14px}.code-card label{display:block;font-size:13px;font-weight:700;margin:12px 0 5px}.code-card input{box-sizing:border-box;width:100%;padding:13px;border:1px solid #dce4de;border-radius:10px;font:inherit;letter-spacing:.12em;text-transform:uppercase}.code-card .code-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.code-card button{border:0;border-radius:9px;padding:10px 14px;background:#16795b;color:white;font:inherit;cursor:pointer}.code-card button.secondary{background:#edf3ef;color:#456057}.one-time-code{font-size:22px!important;font-weight:700;letter-spacing:.16em;text-align:center;padding:14px;background:#f1f7f3;border-radius:10px;color:#16795b!important;direction:ltr}.directory-mode .employee .emp-main small,.directory-mode .employee .leave-count{display:none!important}';
   document.head.appendChild(style);
   style.textContent += '.cloud-status{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 20px;padding:10px 12px;border-radius:10px;background:#fff1ef;color:#8c3430;font-size:13px}.cloud-status button{border:0;border-radius:8px;padding:7px 11px;background:#16795b;color:#fff;font:inherit;white-space:nowrap}';
   // A previous release cached complete employee records locally. Keep the snapshot
@@ -238,6 +238,52 @@
     };
     setTimeout(() => input.focus(), 0);
   }
+  async function toStoredEmployeeCode(employeeId, code) {
+    const source = new TextEncoder().encode('manawib-employee-code-v1|' + employeeId + '|' + code);
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', source));
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from(digest.slice(0, 16), byte => alphabet[byte & 31]).join('');
+  }
+  function showSetCodeDialog(employee, onSubmit) {
+    document.querySelector('.code-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'code-overlay';
+    overlay.innerHTML = '<section class="code-card" role="dialog" aria-modal="true" aria-labelledby="setEmployeeCodeTitle"><h2 id="setEmployeeCodeTitle">' + (employee.hasAccessCode ? 'إعادة تعيين رمز الموظف' : 'تعيين رمز الموظف') + '</h2><p>اختر رمزاً يسهل على الموظف تذكره. استخدم 8 أحرف أو أرقام على الأقل، وتجنب رقم الهاتف أو الرقم الوظيفي.</p><form id="setEmployeeCodeForm"><label for="newEmployeeAccessCode">الرمز الجديد</label><input id="newEmployeeAccessCode" type="password" inputmode="text" autocomplete="new-password" minlength="8" maxlength="32" required><label for="confirmEmployeeAccessCode">تأكيد الرمز</label><input id="confirmEmployeeAccessCode" type="password" inputmode="text" autocomplete="new-password" minlength="8" maxlength="32" required><p id="setEmployeeCodeMessage" class="cloud-error" aria-live="polite"></p><div class="code-actions"><button type="submit" id="saveEmployeeCode">حفظ الرمز</button><button type="button" class="secondary" id="cancelSetEmployeeCode">إلغاء</button></div></form></section>';
+    document.body.appendChild(overlay);
+    const codeInput = overlay.querySelector('#newEmployeeAccessCode');
+    const confirmInput = overlay.querySelector('#confirmEmployeeAccessCode');
+    const form = overlay.querySelector('#setEmployeeCodeForm');
+    const messageNode = overlay.querySelector('#setEmployeeCodeMessage');
+    const close = () => overlay.remove();
+    overlay.querySelector('#cancelSetEmployeeCode').onclick = close;
+    overlay.onclick = event => { if (event.target === overlay) close(); };
+    form.onsubmit = async event => {
+      event.preventDefault();
+      const code = codeInput.value.trim().toUpperCase();
+      const confirmation = confirmInput.value.trim().toUpperCase();
+      if (!/^[A-Z0-9]{8,32}$/.test(code)) {
+        messageNode.textContent = 'اكتب رمزاً من 8 إلى 32 حرفاً إنجليزياً أو رقماً.';
+        codeInput.focus();
+        return;
+      }
+      if (code !== confirmation) {
+        messageNode.textContent = 'الرمزان غير متطابقين. أعد كتابتهما.';
+        confirmInput.focus();
+        return;
+      }
+      const button = overlay.querySelector('#saveEmployeeCode');
+      button.disabled = true;
+      messageNode.textContent = 'جارٍ حفظ الرمز…';
+      try {
+        await onSubmit(code);
+        close();
+      } catch (error) {
+        messageNode.textContent = error?.message || 'تعذر حفظ الرمز. حاول مرة أخرى.';
+        button.disabled = false;
+      }
+    };
+    setTimeout(() => codeInput.focus(), 0);
+  }
   async function openEmployeeRecord(id) {
     if (localPreview || !client) return;
     const target = employees.find(e => e.id === id);
@@ -246,10 +292,18 @@
     clearEmployeePrivateData();
     render();
     showCodeDialog(target, async code => {
-      const { data, error } = await client.rpc('verify_employee_access_code', {
-        p_employee_id:id, p_access_code:code
+      const storedCode = await toStoredEmployeeCode(id, code);
+      let { data, error } = await client.rpc('verify_employee_access_code', {
+        p_employee_id:id, p_access_code:storedCode
       });
-      const row = Array.isArray(data) ? data[0] : data;
+      let row = Array.isArray(data) ? data[0] : data;
+      // Preserve employee codes issued by the previous release, which were stored directly.
+      if (!error && !row && /^[A-HJ-NP-Z2-9]{16}$/.test(code)) {
+        ({ data, error } = await client.rpc('verify_employee_access_code', {
+          p_employee_id:id, p_access_code:code
+        }));
+        row = Array.isArray(data) ? data[0] : data;
+      }
       if (error || !row) throw new Error('الرمز غير صحيح، أو لم يعيّن الأدمن رمزاً لهذا الموظف بعد.');
       const index = employees.findIndex(e => e.id === id);
       if (index < 0) throw new Error('تعذر العثور على الموظف. حدّث الصفحة وحاول مجدداً.');
@@ -266,16 +320,11 @@
   }
   window.MANAWIB_OPEN_EMPLOYEE = openEmployeeRecord;
 
-  function generateEmployeeCode() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('');
-  }
   function showOneTimeCode(employee, code) {
     document.querySelector('.code-overlay')?.remove();
     const overlay = document.createElement('div');
     overlay.className = 'code-overlay';
-    overlay.innerHTML = '<section class="code-card" role="dialog" aria-modal="true"><h2>رمز الدخول الخاص بالموظف</h2><p>أرسل هذا الرمز إلى <strong>' + esc(employee.name) + '</strong>. سيظهر الآن مرة واحدة فقط؛ لا يُحفظ الرمز نفسه في قاعدة البيانات.</p><div class="one-time-code" id="newEmployeeCode">' + esc(code) + '</div><p id="copyCodeMessage" class="cloud-note"></p><div class="code-actions"><button type="button" id="copyEmployeeCode">نسخ الرمز</button><button type="button" class="secondary" id="closeEmployeeCode">تم</button></div></section>';
+    overlay.innerHTML = '<section class="code-card" role="dialog" aria-modal="true"><h2>تم حفظ رمز الموظف</h2><p>أرسل الرمز الذي اخترته إلى <strong>' + esc(employee.name) + '</strong>. يظهر هنا مرة واحدة فقط؛ قاعدة البيانات تحتفظ ببصمته المشفرة ولا تحفظ الرمز نفسه.</p><div class="one-time-code" id="newEmployeeCode">' + esc(code) + '</div><p id="copyCodeMessage" class="cloud-note"></p><div class="code-actions"><button type="button" id="copyEmployeeCode">نسخ الرمز</button><button type="button" class="secondary" id="closeEmployeeCode">تم</button></div></section>';
     document.body.appendChild(overlay);
     overlay.querySelector('#copyEmployeeCode').onclick = async () => {
       const messageNode = overlay.querySelector('#copyCodeMessage');
@@ -290,20 +339,21 @@
     overlay.querySelector('#closeEmployeeCode').onclick = close;
     overlay.onclick = event => { if (event.target === overlay) close(); };
   }
-  async function issueEmployeeCode(employee) {
+  function issueEmployeeCode(employee) {
     if (!user || !employee?.id) return;
-    const code = generateEmployeeCode();
-    const { error } = await client.rpc('set_employee_access_code', {
-      p_employee_id:employee.id, p_access_code:code
+    showSetCodeDialog(employee, async code => {
+      const storedCode = await toStoredEmployeeCode(employee.id, code);
+      const { error } = await client.rpc('set_employee_access_code', {
+        p_employee_id:employee.id, p_access_code:storedCode
+      });
+      if (error) {
+        console.error('Could not set employee access code', error);
+        throw new Error('تعذر حفظ الرمز. تحقق من تحديث قاعدة البيانات ثم أعد المحاولة.');
+      }
+      employee.hasAccessCode = true;
+      updateAccessCodeButton();
+      showOneTimeCode(employee, code);
     });
-    if (error) {
-      toast('تعذر تعيين الرمز. تأكد من تطبيق تحديث قاعدة البيانات ثم أعد المحاولة.');
-      console.error('Could not set employee access code', error);
-      return;
-    }
-    employee.hasAccessCode = true;
-    updateAccessCodeButton();
-    showOneTimeCode(employee, code);
   }
   window.MANAWIB_AFTER_EMPLOYEE_SAVE = async (employee, isNew) => {
     if (user && isNew) await issueEmployeeCode(employee);
@@ -725,3 +775,4 @@
     addRecoveryButtons();
   }
 })();
+

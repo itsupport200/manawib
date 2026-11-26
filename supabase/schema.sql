@@ -177,7 +177,7 @@ $$;
 revoke all on function public.verify_employee_access_code(text, text) from public;
 grant execute on function public.verify_employee_access_code(text, text) to anon, authenticated;
 
--- Admins supply a one-time generated code. Only its bcrypt hash is persisted.
+-- The browser sends a generated storage code for employee access codes; only its bcrypt hash is persisted.
 create or replace function public.set_employee_access_code(
   p_employee_id text,
   p_access_code text
@@ -211,3 +211,4 @@ grant execute on function public.set_employee_access_code(text, text) to authent
 -- Example: authorize an administrator using their lowercase Supabase email.
 -- insert into public.manawib_editors(email) values (lower('admin@example.com'))
 -- on conflict (email) do nothing;
+
